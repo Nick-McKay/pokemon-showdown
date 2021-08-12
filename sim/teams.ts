@@ -70,6 +70,23 @@ export interface PokemonSet {
 	 */
 	level: number;
 	/**
+	 * If declared, this determines the starting HP value for a Pokemon.
+	 */
+	startHP?: number;
+	/**
+	 * If declared, this determines the starting 
+	 * non-volatile status condition affecting for a Pokemon.
+	 */
+	startStatus?: string;
+	/**
+	 * This overrides the type(s) of a Pokemon.
+	 */
+	types?: string[];
+	/**
+	 * This overrides the abilitie(s) of a Pokemon.
+	 */
+	abilities?: string[];
+	/**
 	 * While having no direct competitive effect, certain Pokemon cannot
 	 * be legally obtained as shiny, either as a whole or with certain
 	 * event-only abilities or moves.
@@ -183,10 +200,14 @@ export const Teams = new class Teams {
 				buf += '|';
 			}
 
-			if (set.pokeball || set.hpType || set.gigantamax) {
+			if (set.pokeball || set.hpType || set.gigantamax || set.startHP || set.abilities || set.startStatus) {
 				buf += ',' + (set.hpType || '');
 				buf += ',' + this.packName(set.pokeball || '');
 				buf += ',' + (set.gigantamax ? 'G' : '');
+				buf += ',' + (set.startHP);
+				buf += ',' + (set.abilities ? set.abilities.map(this.packName).join('/') : '');
+				buf += ',' + (set.startStatus);
+				buf += ',' + (set.types ? set.types.map(this.packName).join('/') : '');
 			}
 		}
 
@@ -303,15 +324,19 @@ export const Teams = new class Teams {
 			j = buf.indexOf(']', i);
 			let misc;
 			if (j < 0) {
-				if (i < buf.length) misc = buf.substring(i).split(',', 4);
+				if (i < buf.length) misc = buf.substring(i).split(',', 7);
 			} else {
-				if (i !== j) misc = buf.substring(i, j).split(',', 4);
+				if (i !== j) misc = buf.substring(i, j).split(',', 7);
 			}
 			if (misc) {
 				set.happiness = (misc[0] ? Number(misc[0]) : 255);
 				set.hpType = misc[1] || '';
 				set.pokeball = this.unpackName(misc[2] || '', Dex.items);
 				set.gigantamax = !!misc[3];
+				set.startHP = misc[4] ? Number(misc[4]) : 1;
+				set.abilities = misc[5] ? misc[5].split('/', 24).map(name => this.unpackName(name, Dex.abilities)) : [];
+				set.startStatus = misc[6] ? misc[6] : 'N/A';
+				set.types = misc[7] ? misc[7].split('/', 24).map(name => this.unpackName(name, Dex.types)) : [];
 			}
 			if (j < 0) break;
 			i = j + 1;
@@ -372,6 +397,18 @@ export const Teams = new class Teams {
 		if (set.shiny) {
 			out += `Shiny: Yes  \n`;
 		}
+		if (set.startHP) {
+			out += `StartHP: ${set.startHP}  \n`;
+		}
+		if (set.types) {
+			out += `Types: ${set.types.join("/")}  \n`;
+		}
+		if (set.abilities) {
+			out += `Extra Abilities: ${set.abilities.join("/")}  \n`;
+		}
+		if (set.startStatus) {
+			out += `StartStatus: ${set.startStatus}  \n`;
+		}
 		if (typeof set.happiness === `number` && set.happiness !== 255 && !isNaN(set.happiness)) {
 			out += `Happiness: ${set.happiness}  \n`;
 		}
@@ -384,6 +421,7 @@ export const Teams = new class Teams {
 		if (set.gigantamax) {
 			out += `Gigantamax: Yes  \n`;
 		}
+		
 
 		// stats
 		if (!hideStats) {
@@ -456,6 +494,18 @@ export const Teams = new class Teams {
 		} else if (line.startsWith('Level: ')) {
 			line = line.slice(7);
 			set.level = +line;
+		} else if (line.startsWith('StartHP: ')) {
+			line = line.slice(9);
+			set.startHP = +line;
+		} else if (line.startsWith('Types: ')) {
+			line = line.slice(7);
+			set.types = line.split('/');
+		} else if (line.startsWith('Extra Abilities: ')) {
+			line = line.slice(17);
+			set.types = line.split('/');
+		} else if (line.startsWith('StartStatus: ')) {
+			line = line.slice(13);
+			set.startStatus = line;
 		} else if (line.startsWith('Happiness: ')) {
 			line = line.slice(11);
 			set.happiness = +line;

@@ -11,6 +11,10 @@ export interface PokemonSet<T = string> {
 	evs: StatsTable;
 	ivs: StatsTable;
 	level: number;
+	startHP?: number;
+	startStatus?: string;
+	types?: string[];
+	abilities?: string[];
 	shiny?: boolean;
 	happiness?: number;
 	pokeball?: T;

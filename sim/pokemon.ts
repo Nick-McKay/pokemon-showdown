@@ -333,7 +333,6 @@ export class Pokemon {
 		this.position = 0;
 		this.details = this.species.name + (this.level === 100 ? '' : ', L' + this.level) +
 			(this.gender === '' ? '' : ', ' + this.gender) + (this.set.shiny ? ', shiny' : '');
-
 		this.status = '';
 		this.statusState = {};
 		this.volatiles = {};
@@ -401,6 +400,10 @@ export class Pokemon {
 		this.addedType = '';
 		this.knownType = true;
 		this.apparentType = this.baseSpecies.types.join('/');
+		if (set.types) {
+			this.types = set.types;
+			this.apparentType = set.types.join('/');
+		}
 
 		this.switchFlag = false;
 		this.forceSwitchFlag = false;
@@ -448,6 +451,9 @@ export class Pokemon {
 		this.hp = 0;
 		this.clearVolatile();
 		this.hp = this.maxhp;
+		if (set.startHP) {
+			this.hp = set.startHP;
+		}
 	}
 
 	toJSON(): AnyObject {

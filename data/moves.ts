@@ -18110,6 +18110,23 @@ export const Moves: {[moveid: string]: MoveData} = {
 		type: "Dark",
 		contestType: "Clever",
 	},
+	throwpokeball: {
+		num: 826,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		name: "Throw Pokeball",
+		pp: 999,
+		priority: 0,
+		flags: {},
+		onTryHit(target, source) {
+			this.add('-nothing');
+		},
+		secondary: null,
+		target: "self",
+		type: "Normal",
+		contestType: "Cute",
+	},
 	thunder: {
 		num: 87,
 		accuracy: 70,
