@@ -386,7 +386,7 @@ export const Formats: FormatList = [
 
 		mod: 'gen8',
 		ruleset: ['[Gen 8] PU'],
-		banlist: ['PU', 'Centiskorch', 'Drampa', 'Exeggutor-Alola', 'Gallade', 'Haunter', 'Magmortar', 'Magneton', 'Omastar', 'Turtonator', 'Vikavolt', 'Silvally-Dragon', 'Sneasel', 'Damp Rock', 'Grassy Seed'],
+		banlist: ['PU', 'Centiskorch', 'Drampa', 'Exeggutor-Alola', 'Gallade', 'Haunter', 'Magmortar', 'Magneton', 'Omastar', 'Turtonator', 'Vikavolt', 'Silvally-Dragon', 'Silvally-Ground', 'Sneasel', 'Damp Rock', 'Grassy Seed'],
 	},
 	{
 		name: "[Gen 8] LC UU",
@@ -510,6 +510,11 @@ export const Formats: FormatList = [
 	},
 	{
 		name: "[Gen 8] VGC 2021 Series 10",
+		threads: [
+			`&bullet; <a href="https://www.smogon.com/forums/threads/3677186/">VGC 2021 Series 10 Metagame Discussion</a>`,
+			`&bullet; <a href="https://www.smogon.com/forums/threads/3689153/">VGC 2021 Series 10 Sample Teams</a>`,
+			`&bullet; <a href="https://www.smogon.com/forums/threads/3688166/">VGC 2021 Series 10 Viability Rankings</a>`,
+		],
 
 		mod: 'gen8',
 		gameType: 'doubles',
@@ -1715,8 +1720,12 @@ export const Formats: FormatList = [
 		validateSet(set, teamHas) {
 			const dex = this.dex;
 			const ability = dex.moves.get(set.ability);
-			if (ability.category !== 'Status' || ability.status === 'slp' ||
-				this.ruleTable.isRestricted(`move:${ability.id}`) || set.moves.map(this.dex.toID).includes(ability.id)) {
+			// Prevent stack overflow
+			const overflowAbilityNames = ['Assist', 'Entrainment', 'Skill Swap'];
+			if (
+				overflowAbilityNames.includes(ability.name) || ability.category !== 'Status' || ability.status === 'slp' ||
+				this.ruleTable.isRestricted(`move:${ability.id}`) || set.moves.map(this.toID).includes(ability.id)
+			) {
 				return this.validateSet(set, teamHas);
 			}
 			if (ability.forceSwitch || ability.selfSwitch) {
@@ -3221,7 +3230,7 @@ export const Formats: FormatList = [
 			'Picked Team Size = 1', 'Max Team Size = 3',
 			'[Gen 3] OU', 'Accuracy Moves Clause', 'Sleep Moves Clause', 'Team Preview',
 		],
-		banlist: ['Slaking', 'Snorlax', 'Suicune', 'Destiny Bond', 'Explosion', 'Ingrain', 'Perish Song', 'Self-Destruct', 'Bright Powder', 'Focus Band', 'King\'s Rock', 'Lax Incense', 'Quick Claw'],
+		banlist: ['Clefable', 'Slaking', 'Snorlax', 'Suicune', 'Destiny Bond', 'Explosion', 'Ingrain', 'Perish Song', 'Self-Destruct', 'Bright Powder', 'Focus Band', 'King\'s Rock', 'Lax Incense', 'Quick Claw'],
 	},
 	{
 		name: "[Gen 3] Custom Game",

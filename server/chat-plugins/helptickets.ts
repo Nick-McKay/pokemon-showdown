@@ -426,7 +426,6 @@ export class HelpTicket extends Rooms.RoomGame {
 	onChatMessage(message: string, user: User) {
 		HelpTicket.uploadReplaysFrom(message, user, user.connections[0]);
 	}
-	static modlogStream = Rooms.Modlog.initialize('help-texttickets' as ModlogID);
 	// workaround to modlog for no room
 	static async modlog(entry: PartialModlogEntry) {
 		await Rooms.Modlog.write('help-texttickets' as ModlogID, entry);
@@ -2334,16 +2333,21 @@ export const commands: Chat.ChatCommands = {
 				targetUser.popup(`|modal|${user.name} has banned you from creating help tickets.${(reason ? `\n\nReason: ${reason}` : ``)}\n\nYour ban will expire in a few days.`);
 			}
 
-			const affected = await HelpTicket.ban(targetUser || userid, reason);
+			const affected: (User | ID)[] = await HelpTicket.ban(targetUser || userid, reason);
 			this.addGlobalModAction(`${username} was ticket banned by ${user.name}.${reason ? ` (${reason})` : ``}`);
 			const acAccount = (targetUser && targetUser.autoconfirmed !== userid && targetUser.autoconfirmed);
+
 			let displayMessage = '';
 			if (affected.length > 1) {
-				displayMessage = `${username}'s ${acAccount ? ` ac account: ${acAccount}, ` : ""}ticket banned alts: ${affected.slice(1).map(userObj => userObj.getLastName()).join(", ")}`;
+				const alts = affected.slice(1).map(userObj => typeof userObj === 'string' ? userObj : userObj.getLastName()).join(", ");
+				displayMessage = `${username}'s ${acAccount ? ` ac account: ${acAccount}, ` : ""}ticket banned alts: ${alts}`;
 				this.privateModAction(displayMessage);
 			} else if (acAccount) {
 				displayMessage = `${username}'s ac account: ${acAccount}`;
 				this.privateModAction(displayMessage);
+			}
+			if (user.previousIDs.length) {
+				affected.push(...user.previousIDs);
 			}
 
 			this.globalModlog(`TICKETBAN`, targetUser || userid, reason);
