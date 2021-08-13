@@ -6250,11 +6250,6 @@ export const MovesText: {[k: string]: MoveText} = {
 
 		cant: "The effects of Throat Chop prevent [POKEMON] from using certain moves!",
 	},
-	throwpokeball: {
-		name: "Throw Pokeball",
-		desc: "Throw a Pokeball and attempt to catch a wild Pokemon",
-		shortDesc: "Throw a Pokeball",
-	},
 	thunder: {
 		name: "Thunder",
 		desc: "Has a 30% chance to paralyze the target. This move can hit a target using Bounce, Fly, or Sky Drop, or is under the effect of Sky Drop. If the weather is Primordial Sea or Rain Dance, this move does not check accuracy. If the weather is Desolate Land or Sunny Day, this move's accuracy is 50%. If this move is used against a Pokemon holding Utility Umbrella, this move's accuracy remains at 70%.",
