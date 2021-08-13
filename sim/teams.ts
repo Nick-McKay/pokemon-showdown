@@ -200,7 +200,7 @@ export const Teams = new class Teams {
 				buf += '|';
 			}
 
-			if (set.pokeball || set.hpType || set.gigantamax || set.startHP || set.abilities || set.startStatus) {
+			if (set.pokeball || set.hpType || set.gigantamax || set.startHP || set.abilities || set.startStatus || set.types) {
 				buf += ',' + (set.hpType || '');
 				buf += ',' + this.packName(set.pokeball || '');
 				buf += ',' + (set.gigantamax ? 'G' : '');
@@ -324,9 +324,9 @@ export const Teams = new class Teams {
 			j = buf.indexOf(']', i);
 			let misc;
 			if (j < 0) {
-				if (i < buf.length) misc = buf.substring(i).split(',', 7);
+				if (i < buf.length) misc = buf.substring(i).split(',', 8);
 			} else {
-				if (i !== j) misc = buf.substring(i, j).split(',', 7);
+				if (i !== j) misc = buf.substring(i, j).split(',', 8);
 			}
 			if (misc) {
 				set.happiness = (misc[0] ? Number(misc[0]) : 255);

@@ -37,8 +37,9 @@ export const Formats: FormatList = [
 		
 		onBegin() {
 			for (const pokemon of this.getAllPokemon()) {
-				if (pokemon.set.startStatus)
+				if (pokemon.set.startStatus) {
 					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
 			}
 		},
 		getAbilities(pokemon) {
@@ -78,6 +79,11 @@ export const Formats: FormatList = [
 				const effect = 'ability:' + ability;
 				delete pokemon.volatiles[effect];
 				pokemon.addVolatile(effect);
+			}
+			if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+				pokemon.types = pokemon.set.types;
+				pokemon.apparentType = pokemon.set.types.join("/");
+				this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
 			}
 		},
 	},

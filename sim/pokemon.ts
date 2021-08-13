@@ -400,10 +400,6 @@ export class Pokemon {
 		this.addedType = '';
 		this.knownType = true;
 		this.apparentType = this.baseSpecies.types.join('/');
-		if (set.types) {
-			this.types = set.types;
-			this.apparentType = set.types.join('/');
-		}
 
 		this.switchFlag = false;
 		this.forceSwitchFlag = false;
