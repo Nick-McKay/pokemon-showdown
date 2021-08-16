@@ -24,9 +24,12 @@ To reload chat commands:
 */
 
 import type {RoomPermission, GlobalPermission} from './user-groups';
-import {FriendsDatabase, PM} from './friends';
 import type {Punishment} from './punishments';
 import type {PartialModlogEntry} from './modlog';
+import {FriendsDatabase, PM} from './friends';
+import {SQL, Repl, FS, Utils} from '../lib';
+import {Dex} from '../sim';
+import {resolve} from 'path';
 
 export type PageHandler = (this: PageContext, query: string[], user: User, connection: Connection)
 => Promise<string | null | void> | string | null | void;
@@ -134,7 +137,9 @@ const MAX_PARSE_RECURSION = 10;
 const VALID_COMMAND_TOKENS = '/!';
 const BROADCAST_TOKEN = '!';
 
-import {FS, Utils} from '../lib';
+const PLUGIN_DATABASE_PATH = './databases/chat-plugins.db';
+const MAX_PLUGIN_LOADING_DEPTH = 3;
+
 import {formatText, linkRegex, stripFormatting} from './chat-formatter';
 
 // @ts-ignore no typedef available
@@ -1678,6 +1683,50 @@ export const Chat = new class {
 		return translated;
 	}
 
+	/**
+	 * SQL handler
+	 *
+	 * All chat plugins share one database.
+	 * Chat.databaseReadyPromise will be truthy if the database is not yet ready.
+	 */
+	database = SQL(module, {file: ('Config' in global && Config.nofswriting) ? ':memory:' : PLUGIN_DATABASE_PATH});
+	databaseReadyPromise: Promise<void> | null = null;
+
+	async prepareDatabase() {
+		if (!PM.isParentProcess) return; // We don't need a database in a subprocess that requires Chat.
+		if (!Config.usesqlite) return;
+		// check if we have the db_info table, which will always be present unless the schema needs to be initialized
+		let statement = await this.database.prepare(
+			`SELECT count(*) AS hasDBInfo FROM sqlite_master WHERE type = 'table' AND name = 'db_info'`
+		);
+		if (!statement) return; // I was told this is a best practice for the SQL library
+		const {hasDBInfo} = await this.database.get(statement);
+		if (!hasDBInfo) await this.database.runFile('./databases/schemas/chat-plugins.sql');
+
+		statement = await this.database.prepare(
+			`SELECT value as curVersion FROM db_info WHERE key = 'version'`
+		);
+		if (!statement) return;
+		const result = await this.database.get(statement);
+		const curVersion = parseInt(result.curVersion);
+		if (!curVersion) throw new Error(`db_info table is present, but schema version could not be parsed`);
+
+		// automatically run migrations of the form "v{number}.sql" in the migrations/chat-plugins folder
+		const migrationsFolder = './databases/migrations/chat-plugins';
+		const migrationsToRun = [];
+		for (const migrationFile of (await FS(migrationsFolder).readdir())) {
+			const migrationVersion = parseInt(/v(\d+)\.sql$/.exec(migrationFile)?.[1] || '');
+			if (!migrationVersion) continue;
+			if (migrationVersion > curVersion) migrationsToRun.push({version: migrationVersion, file: migrationFile});
+		}
+		Utils.sortBy(migrationsToRun, ({version}) => version);
+		for (const {file} of migrationsToRun) {
+			await this.database.runFile(resolve(migrationsFolder, file));
+		}
+
+		Chat.destroyHandlers.push(() => Chat.database?.destroy());
+	}
+
 	readonly MessageContext = MessageContext;
 	readonly CommandContext = CommandContext;
 	readonly PageContext = PageContext;
@@ -1757,10 +1806,27 @@ export const Chat = new class {
 
 	packageData: AnyObject = {};
 
+	loadPluginDirectory(dir: string, depth = 0) {
+		for (const file of FS(dir).readdirSync()) {
+			const path = resolve(dir, file);
+			if (FS(path).isDirectorySync()) {
+				depth++;
+				if (depth > MAX_PLUGIN_LOADING_DEPTH) continue;
+				this.loadPluginDirectory(path, depth);
+			} else {
+				try {
+					this.loadPlugin(path);
+				} catch (e) {
+					Monitor.crashlog(e, "A loading chat plugin");
+					continue;
+				}
+			}
+		}
+	}
 	loadPlugin(file: string) {
 		let plugin;
 		if (file.endsWith('.ts') || file.endsWith('.js')) {
-			plugin = require(`./${file.slice(0, -3)}`);
+			plugin = require(file.slice(0, -3));
 		} else {
 			return;
 		}
@@ -1860,28 +1926,10 @@ export const Chat = new class {
 
 		// Install plug-in commands and chat filters
 
-		// All resulting filenames will be relative to basePath
-		const getFiles = (basePath: string, path: string): string[] => {
-			const filesInThisDir = FS(`${basePath}/${path}`).readdirSync();
-			let allFiles: string[] = [];
-			for (const file of filesInThisDir) {
-				const fileWithPath = path + (path ? '/' : '') + file;
-				if (FS(`${basePath}/${fileWithPath}`).isDirectorySync()) {
-					if (file.startsWith('.')) continue;
-					allFiles = allFiles.concat(getFiles(basePath, fileWithPath));
-				} else {
-					allFiles.push(fileWithPath);
-				}
-			}
-			return allFiles;
-		};
 
 		Chat.commands = Object.create(null);
 		Chat.pages = Object.create(null);
-		const coreFiles = FS('server/chat-commands').readdirSync();
-		for (const file of coreFiles) {
-			this.loadPlugin(`chat-commands/${file}`);
-		}
+		this.loadPluginDirectory('server/chat-commands');
 		Chat.baseCommands = Chat.commands;
 		Chat.basePages = Chat.pages;
 		Chat.commands = Object.assign(Object.create(null), Chat.baseCommands);
@@ -1891,27 +1939,12 @@ export const Chat = new class {
 		this.loadPluginData(Config, 'config');
 		this.loadPluginData(Tournaments, 'tournaments');
 
-		let files = FS('server/chat-plugins').readdirSync();
-		try {
-			if (FS('server/chat-plugins/private').isDirectorySync()) {
-				files = files.concat(getFiles('server/chat-plugins', 'private'));
-			}
-		} catch (err) {
-			if (err.code !== 'ENOENT') throw err;
-		}
-
-		for (const file of files) {
-			try {
-				this.loadPlugin(`chat-plugins/${file}`);
-			} catch (e) {
-				Monitor.crashlog(e, "A loading chat plugin");
-				continue;
-			}
-		}
+		this.loadPluginDirectory('server/chat-plugins');
 		Chat.oldPlugins = {};
 		// lower priority should run later
 		Utils.sortBy(Chat.filters, filter => -(filter.priority || 0));
 	}
+
 	destroy() {
 		for (const handler of Chat.destroyHandlers) {
 			handler();
@@ -2464,4 +2497,28 @@ export interface Monitor {
 	label: string;
 	condition?: string;
 	monitor?: MonitorHandler;
+}
+
+// explicitly check this so it doesn't happen in other child processes
+if (!process.send) {
+	Chat.database.spawn(Config.chatdbprocesses || 1);
+	Chat.databaseReadyPromise = Chat.prepareDatabase();
+	// we need to make sure it is explicitly JUST the child of the original parent db process
+	// no other child processes
+} else if (process.mainModule === module) {
+	global.Monitor = {
+		crashlog(error: Error, source = 'A chat child process', details: AnyObject | null = null) {
+			const repr = JSON.stringify([error.name, error.message, source, details]);
+			process.send!(`THROW\n@!!@${repr}\n${error.stack}`);
+		},
+	};
+	process.on('uncaughtException', err => {
+		Monitor.crashlog(err, 'A chat database process');
+	});
+	process.on('unhandledRejection', err => {
+		Monitor.crashlog(err as Error, 'A chat database process');
+	});
+	global.Config = require('./config-loader').Config;
+	// eslint-disable-next-line no-eval
+	Repl.start('chat-db', cmd => eval(cmd));
 }
