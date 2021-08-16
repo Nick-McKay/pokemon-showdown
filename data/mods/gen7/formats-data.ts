@@ -975,6 +975,12 @@ export const FormatsData: {[k: string]: ModdedSpeciesFormatsData} = {
 		tier: "PU",
 		doublesTier: "(DUU)",
 	},
+	kabutopsmega: {
+		randomBattleMoves: ["aquajet", "knockoff", "liquidation", "rapidspin", "stoneedge", "swordsdance"],
+		randomDoubleBattleMoves: ["aquajet", "knockoff", "liquidation", "protect", "rockslide", "stoneedge", "swordsdance"],
+		tier: "PU",
+		doublesTier: "(DUU)",
+	},
 	aerodactyl: {
 		randomBattleMoves: ["defog", "doubleedge", "earthquake", "pursuit", "roost", "stealthrock", "stoneedge", "taunt"],
 		randomDoubleBattleMoves: ["earthquake", "protect", "rockslide", "skydrop", "stoneedge", "tailwind", "wideguard"],

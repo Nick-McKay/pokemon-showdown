@@ -883,6 +883,12 @@ export const FormatsData: {[k: string]: ModdedSpeciesFormatsData} = {
 	},
 	kabutops: {
 		inherit: true,
+		randomBattleMoves: [],
+		tier: "UU",
+		doublesTier: "DOU",
+	},
+	kabutopsmega: {
+		inherit: true,
 		randomBattleMoves: ["aquajet", "swordsdance", "rockslide", "waterfall", "superpower", "stealthrock"],
 		tier: "UU",
 		doublesTier: "DOU",

@@ -19,6 +19,10 @@ export const ItemsText: {[k: string]: ItemText} = {
 		name: "Adrenaline Orb",
 		desc: "Raises holder's Speed by 1 stage if it gets affected by Intimidate. Single use.",
 	},
+	kabutopsite: {
+		name: "Kabutopsite",
+		desc: "If held by a Kabuto, this item allows it to Mega Evolve in battle.",
+	},
 	aerodactylite: {
 		name: "Aerodactylite",
 		desc: "If held by an Aerodactyl, this item allows it to Mega Evolve in battle.",

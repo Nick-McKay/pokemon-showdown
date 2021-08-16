@@ -3637,6 +3637,29 @@
         }
       ]
     },
+    "kabutops": {
+      "flags": {
+        "megaOnly": 1
+      },
+      "sets": [
+        {
+          "species": "Kabutops",
+          "item": "Kabutopsite",
+          "ability": "Swift Swim",
+          "evs": {"hp": 40, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 216},
+          "nature": "Jolly",
+          "moves": [["Hone Claws"], ["Stone Edge"], ["Tackle"], ["Protect"]]
+        },
+        {
+          "species": "Kabutops",
+          "item": "Kabutopsite",
+          "ability": "Pressure",
+          "evs": {"hp": 40, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 216},
+          "nature": "Jolly",
+          "moves": [["Roost"], ["Taunt"], ["Stone Edge"], ["Aerial Ace"]]
+        }
+      ]
+    },
     "beedrill": {
       "flags": {
         "megaOnly": 1

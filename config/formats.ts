@@ -35,6 +35,19 @@ export const Formats: FormatList = [
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
 		//psn, tox, frz, par, brn
 		
+		onTeamPreview() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+				if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+					pokemon.types = pokemon.set.types;
+					pokemon.apparentType = pokemon.set.types.join("/");
+					this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
+				}
+			}
+		},
+
 		onBegin() {
 			for (const pokemon of this.getAllPokemon()) {
 				if (pokemon.set.startStatus) {
@@ -97,6 +110,13 @@ export const Formats: FormatList = [
 		mod: 'gen8',
 		gameType: 'doubles',
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		onBegin() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+			}
+		},
 		getAbilities(pokemon) {
 			const abilities = new Set<string>();
 			if (pokemon.set.abilities) {
@@ -115,7 +135,7 @@ export const Formats: FormatList = [
 		},
 		onBeforeSwitchIn(pokemon) {
 			let format = this.format;
-			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop2v2');
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
 			for (const ability of format.getAbilities!(pokemon)) {
 				const effect = 'ability:' + ability;
 				pokemon.volatiles[effect] = {id: this.toID(effect), target: pokemon};
@@ -126,7 +146,7 @@ export const Formats: FormatList = [
 		onSwitchInPriority: 2,
 		onSwitchIn(pokemon) {
 			let format = this.format;
-			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop2v2');
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
 			for (const ability of format.getAbilities!(pokemon)) {
 				if (ability === 'noability') {
 					this.hint(`Mirror Armor and Trace break in Shared Power formats that don't use Shared Power as a base, so they get removed from non-base users.`);
@@ -134,6 +154,11 @@ export const Formats: FormatList = [
 				const effect = 'ability:' + ability;
 				delete pokemon.volatiles[effect];
 				pokemon.addVolatile(effect);
+			}
+			if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+				pokemon.types = pokemon.set.types;
+				pokemon.apparentType = pokemon.set.types.join("/");
+				this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
 			}
 		},
 	},
@@ -147,6 +172,13 @@ export const Formats: FormatList = [
 		mod: 'gen8',
 		gameType: 'freeforall',
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		onBegin() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+			}
+		},
 		getAbilities(pokemon) {
 			const abilities = new Set<string>();
 			if (pokemon.set.abilities) {
@@ -155,7 +187,9 @@ export const Formats: FormatList = [
 						abilities.add('noability');
 						continue;
 					}
-					abilities.add(extra.trim());
+					else {
+						abilities.add(extra.trim());
+					}
 				}
 			}
 			abilities.delete(pokemon.baseAbility);
@@ -163,7 +197,7 @@ export const Formats: FormatList = [
 		},
 		onBeforeSwitchIn(pokemon) {
 			let format = this.format;
-			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop3v1');
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
 			for (const ability of format.getAbilities!(pokemon)) {
 				const effect = 'ability:' + ability;
 				pokemon.volatiles[effect] = {id: this.toID(effect), target: pokemon};
@@ -174,7 +208,7 @@ export const Formats: FormatList = [
 		onSwitchInPriority: 2,
 		onSwitchIn(pokemon) {
 			let format = this.format;
-			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop3v1');
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
 			for (const ability of format.getAbilities!(pokemon)) {
 				if (ability === 'noability') {
 					this.hint(`Mirror Armor and Trace break in Shared Power formats that don't use Shared Power as a base, so they get removed from non-base users.`);
@@ -182,6 +216,11 @@ export const Formats: FormatList = [
 				const effect = 'ability:' + ability;
 				delete pokemon.volatiles[effect];
 				pokemon.addVolatile(effect);
+			}
+			if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+				pokemon.types = pokemon.set.types;
+				pokemon.apparentType = pokemon.set.types.join("/");
+				this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
 			}
 		},
 	},

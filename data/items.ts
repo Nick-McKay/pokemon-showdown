@@ -86,6 +86,20 @@ export const Items: {[itemid: string]: ItemData} = {
 		num: 846,
 		gen: 7,
 	},
+	kabutopsite: {
+		name: "Kabutopsite",
+		spritenum: 577,
+		megaStone: "Kabutops-Mega",
+		megaEvolves: "Kabutops",
+		itemUser: ["Kabutops"],
+		onTakeItem(item, source) {
+			if (item.megaEvolves === source.baseSpecies.baseSpecies) return false;
+			return true;
+		},
+		num: 807,
+		gen: 6,
+		isNonstandard: "Past",
+	},
 	aerodactylite: {
 		name: "Aerodactylite",
 		spritenum: 577,

@@ -7,6 +7,10 @@ export const Items: {[k: string]: ModdedItemData} = {
 		inherit: true,
 		isNonstandard: null,
 	},
+	kabutopsite: {
+		inherit: true,
+		isNonstandard: null,
+	},
 	aerodactylite: {
 		inherit: true,
 		isNonstandard: null,

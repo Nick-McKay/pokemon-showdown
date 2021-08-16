@@ -623,6 +623,9 @@ export const PokedexText: {[k: string]: PokedexText} = {
 	kabutops: {
 		name: "Kabutops",
 	},
+	kabutopsmega: {
+		name: "Kabutops-Mega",
+	},
 	aerodactyl: {
 		name: "Aerodactyl",
 	},
