@@ -372,9 +372,9 @@ export class Trivia extends Rooms.RoomGame {
 	curQuestion: string;
 	curAnswers: string[];
 	askedAt: number[];
-	categories: ID[];
+	categories: ID[] | 'all';
 	constructor(
-		room: Room, mode: string, categories: ID[], givesPoints: boolean,
+		room: Room, mode: string, categories: ID[] | 'all', givesPoints: boolean,
 		length: keyof typeof LENGTHS | number, questions: TriviaQuestion[], creator: string,
 		isRandomMode = false, isSubGame = false,
 	) {
@@ -396,7 +396,7 @@ export class Trivia extends Rooms.RoomGame {
 		case 'random':
 			category = this.room.tr`Random (${ALL_CATEGORIES[questions[0].category]})`; break;
 		default:
-			category = this.categories.map(cat => ALL_CATEGORIES[CATEGORY_ALIASES[cat] || cat]).join(' + ');
+			category = (this.categories as ID[]).map(cat => ALL_CATEGORIES[CATEGORY_ALIASES[cat] || cat]).join(' + ');
 		}
 
 		this.game = {
@@ -1524,12 +1524,14 @@ const triviaCommands: Chat.ChatCommands = {
 		}
 		if (!MODES[mode]) return this.errorReply(this.tr`"${mode}" is an invalid mode.`);
 
-		const categories = targets[1]
+		let categories: ID[] | 'all' | 'random' = targets[1]
 			.split('+')
 			.map(cat => {
 				const id = toID(cat);
 				return CATEGORY_ALIASES[id] || id;
 			});
+		if (categories[0] === 'all') categories = 'all';
+		if (categories[0] === 'random') categories = 'random';
 		if (categories.length > 1 && (categories.includes('all' as ID) || categories.includes('random' as ID))) {
 			throw new Chat.ErrorMessage(`You cannot combine all or random with another category.`);
 		}
@@ -1544,12 +1546,12 @@ const triviaCommands: Chat.ChatCommands = {
 		// Assume that infinite mode will last for at least 75 points
 		const questionsNecessary = typeof length === 'string' ? (LENGTHS[length].cap || 75) / 5 : length;
 		if (questions.length < questionsNecessary) {
-			if (categories[0] === 'random') {
+			if (categories === 'random') {
 				return this.errorReply(
 					this.tr`There are not enough questions in the randomly chosen category to finish a trivia game.`
 				);
 			}
-			if (categories[0] === 'all') {
+			if (categories === 'all') {
 				return this.errorReply(
 					this.tr`There are not enough questions in the trivia database to finish a trivia game.`
 				);
@@ -1570,6 +1572,7 @@ const triviaCommands: Chat.ChatCommands = {
 			_Trivia = TimerModeTrivia;
 		}
 
+		categories = categories === 'random' ? [questions[0].category] as ID[] : categories;
 		room.game = new _Trivia(room, mode, categories, givesPoints, length, questions, user.name, isRandomMode);
 	},
 	newhelp: [
