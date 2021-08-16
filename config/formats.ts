@@ -33,7 +33,6 @@ export const Formats: FormatList = [
 
 		mod: 'gen8',
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
-		//psn, tox, frz, par, brn
 		
 		onTeamPreview() {
 			for (const pokemon of this.getAllPokemon()) {
@@ -110,6 +109,19 @@ export const Formats: FormatList = [
 		mod: 'gen8',
 		gameType: 'doubles',
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		onTeamPreview() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+				if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+					pokemon.types = pokemon.set.types;
+					pokemon.apparentType = pokemon.set.types.join("/");
+					this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
+				}
+			}
+		},
+
 		onBegin() {
 			for (const pokemon of this.getAllPokemon()) {
 				if (pokemon.set.startStatus) {
@@ -172,6 +184,19 @@ export const Formats: FormatList = [
 		mod: 'gen8',
 		gameType: 'freeforall',
 		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		onTeamPreview() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+				if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+					pokemon.types = pokemon.set.types;
+					pokemon.apparentType = pokemon.set.types.join("/");
+					this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
+				}
+			}
+		},
+
 		onBegin() {
 			for (const pokemon of this.getAllPokemon()) {
 				if (pokemon.set.startStatus) {
@@ -224,7 +249,6 @@ export const Formats: FormatList = [
 			}
 		},
 	},
-
 
 
 	// Sw/Sh Singles
