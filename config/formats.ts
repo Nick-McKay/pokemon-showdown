@@ -32,7 +32,7 @@ export const Formats: FormatList = [
 		],
 
 		mod: 'gen8',
-		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		ruleset: ['HP Percentage Mod', 'Overflow Stat Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
 		
 		onTeamPreview() {
 			for (const pokemon of this.getAllPokemon()) {
@@ -108,7 +108,82 @@ export const Formats: FormatList = [
 
 		mod: 'gen8',
 		gameType: 'doubles',
-		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		ruleset: ['HP Percentage Mod', 'Overflow Stat Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		onTeamPreview() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+				if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+					pokemon.types = pokemon.set.types;
+					pokemon.apparentType = pokemon.set.types.join("/");
+					this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
+				}
+			}
+		},
+
+		onBegin() {
+			for (const pokemon of this.getAllPokemon()) {
+				if (pokemon.set.startStatus) {
+					pokemon.setStatus(pokemon.set.startStatus, pokemon);
+				}
+			}
+		},
+		getAbilities(pokemon) {
+			const abilities = new Set<string>();
+			if (pokemon.set.abilities) {
+				for (const extra of pokemon.set.abilities) {
+					if (['trace', 'mirrorarmor', ''].includes(extra.trim())) {
+						abilities.add('noability');
+						continue;
+					}
+					else {
+						abilities.add(extra.trim());
+					}
+				}
+			}
+			abilities.delete(pokemon.baseAbility);
+			return abilities;
+		},
+		onBeforeSwitchIn(pokemon) {
+			let format = this.format;
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
+			for (const ability of format.getAbilities!(pokemon)) {
+				const effect = 'ability:' + ability;
+				pokemon.volatiles[effect] = {id: this.toID(effect), target: pokemon};
+				if (!pokemon.m.abils) pokemon.m.abils = [];
+				if (!pokemon.m.abils.includes(effect)) pokemon.m.abils.push(effect);
+			}
+		},
+		onSwitchInPriority: 2,
+		onSwitchIn(pokemon) {
+			let format = this.format;
+			if (!format.getAbilities) format = this.dex.formats.get('gen8tabletop1v1');
+			for (const ability of format.getAbilities!(pokemon)) {
+				if (ability === 'noability') {
+					this.hint(`Mirror Armor and Trace break in Shared Power formats that don't use Shared Power as a base, so they get removed from non-base users.`);
+				}
+				const effect = 'ability:' + ability;
+				delete pokemon.volatiles[effect];
+				pokemon.addVolatile(effect);
+			}
+			if (pokemon.set.types && pokemon.set.types.join("/") != "") {
+				pokemon.types = pokemon.set.types;
+				pokemon.apparentType = pokemon.set.types.join("/");
+				this.add('-start', pokemon, 'typechange', pokemon.set.types.join("/"));
+			}
+		},
+	},
+	{
+		name: "[Gen 8] Tabletop 3v3",
+		desc: `When players fight an enemy 3 at a time`,
+		threads: [
+			``,
+		],
+
+		mod: 'gen8',
+		gameType: 'triples',
+		ruleset: ['HP Percentage Mod', 'Overflow Stat Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
 		onTeamPreview() {
 			for (const pokemon of this.getAllPokemon()) {
 				if (pokemon.set.startStatus) {
@@ -183,7 +258,7 @@ export const Formats: FormatList = [
 
 		mod: 'gen8',
 		gameType: 'freeforall',
-		ruleset: ['HP Percentage Mod', 'Team Preview', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
+		ruleset: ['HP Percentage Mod', 'Team Preview', 'Overflow Stat Mod', 'Cancel Mod', 'Max Team Size = 24', 'Max Move Count = 24', 'Max Level = 9999', 'Default Level = 100'],
 		onTeamPreview() {
 			for (const pokemon of this.getAllPokemon()) {
 				if (pokemon.set.startStatus) {
