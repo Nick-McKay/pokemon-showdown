@@ -17033,7 +17033,7 @@ export const Moves: {[moveid: string]: MoveData} = {
 		basePower: 50,
 		category: "Physical",
 		name: "Struggle",
-		pp: 1,
+		pp: 999,
 		noPPBoosts: true,
 		priority: 0,
 		flags: {contact: 1, protect: 1},
