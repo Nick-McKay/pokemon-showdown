@@ -45,7 +45,6 @@ interface ModlogResults {
 }
 
 interface ModlogSQLQuery<T> {
-	statement: SQL.Statement;
 	queryText: string;
 	args: T[];
 	returnsResults?: boolean;
@@ -140,15 +139,16 @@ export class Modlog {
 			await this.database.runFile(MODLOG_SCHEMA_PATH);
 		}
 
-		const statement = `SELECT count(*) AS hasDBInfo FROM sqlite_master WHERE type = 'table' AND name = 'db_info'`;
-		await this.database.prepare(statement);
-		const {hasDBInfo} = await this.database.get(statement, []);
+		const {hasDBInfo} = await this.database.get(
+			`SELECT count(*) AS hasDBInfo FROM sqlite_master WHERE type = 'table' AND name = 'db_info'`
+		);
 
 		if (hasDBInfo === 0) {
 			// needs v2 migration
-			Monitor.warn(`The modlog database is being migrated to version 2; this may take a while.`);
+			const warnFunction = ('Monitor' in global && Monitor.warn) ? Monitor.warn : console.log;
+			warnFunction(`The modlog database is being migrated to version 2; this may take a while.`);
 			await this.database.runFile(MODLOG_V2_MIGRATION_PATH);
-			Monitor.warn(`Modlog database migration complete.`);
+			warnFunction(`Modlog database migration complete.`);
 		}
 
 		this.modlogInsertionQuery = await this.database.prepare(
@@ -303,8 +303,8 @@ export class Modlog {
 
 		if (this.readyPromise) await this.readyPromise;
 		if (!this.databaseReady) return null;
-		const query = await this.prepareSQLSearch(rooms, maxLines, onlyPunishments, search);
-		const results = (await this.database.all(query.statement, query.args))
+		const query = this.prepareSQLSearch(rooms, maxLines, onlyPunishments, search);
+		const results = (await this.database.all(query.queryText, query.args))
 			.map((row: any) => this.dbRowToModlogEntry(row));
 
 		const duration = Date.now() - startTime;
@@ -340,12 +340,12 @@ export class Modlog {
 	 * @param ands Each AND conditions to be appended to every OR condition (e.g. `roomid = ?`)
 	 * @param sortAndLimit A fragment of the form `ORDER BY ... LIMIT ...`
 	 */
-	async buildParallelIndexScanQuery(
+	buildParallelIndexScanQuery(
 		select: string,
 		ors: SQLQuery[],
 		ands: SQLQuery[],
 		sortAndLimit: SQLQuery
-	): Promise<ModlogSQLQuery<string | number>> {
+	): ModlogSQLQuery<string | number> {
 		if (!this.database) throw new Error(`Parallel index scan queries cannot be built when SQLite is not enabled.`);
 		// assemble AND fragment
 		let andQuery = ``;
@@ -373,18 +373,17 @@ export class Modlog {
 		args.push(...sortAndLimit.args);
 
 		return {
-			statement: await this.database.prepare(query) as SQL.Statement,
 			queryText: query,
 			args,
 		};
 	}
 
-	async prepareSQLSearch(
+	prepareSQLSearch(
 		rooms: ModlogID[] | 'all',
 		maxLines: number,
 		onlyPunishments: boolean,
 		search: ModlogSearch
-	): Promise<ModlogSQLQuery<string | number>> {
+	): ModlogSQLQuery<string | number> {
 		const select = `SELECT *, (SELECT group_concat(userid, ',') FROM alts WHERE alts.modlog_id = modlog.modlog_id) as alts FROM modlog`;
 		const ors = [];
 		const ands = [];
@@ -426,7 +425,7 @@ export class Modlog {
 			if (action.isExclusion) {
 				ands.push({query: `action NOT LIKE ?`, args});
 			} else {
-				ors.push({query: `action LIKE ?`, args});
+				ands.push({query: `action LIKE ?`, args});
 			}
 		}
 		if (onlyPunishments) {
@@ -439,7 +438,7 @@ export class Modlog {
 			if (ip.isExclusion) {
 				ands.push({query: `ip NOT LIKE ?`, args});
 			} else {
-				ors.push({query: `ip LIKE ?`, args});
+				ands.push({query: `ip LIKE ?`, args});
 			}
 		}
 		for (const actionTaker of search.actionTaker) {
@@ -447,7 +446,7 @@ export class Modlog {
 			if (actionTaker.isExclusion) {
 				ands.push({query: `action_taker_userid NOT LIKE ?`, args});
 			} else {
-				ors.push({query: `action_taker_userid LIKE ?`, args});
+				ands.push({query: `action_taker_userid LIKE ?`, args});
 			}
 		}
 
@@ -457,26 +456,25 @@ export class Modlog {
 			if (noteSearch.isExclusion) {
 				ands.push({query: `note ${noteSearch.isExact ? '!' : 'NOT '}${tester}`, args});
 			} else {
-				ors.push({query: `note ${tester}`, args});
+				ands.push({query: `note ${tester}`, args});
 			}
 		}
 
 		for (const user of search.user) {
 			let tester;
-			let args;
+			let param;
 			if (user.isExact) {
 				tester = user.isExclusion ? `!= ?` : `= ?`;
-				args = [user.search.toLowerCase()];
+				param = user.search.toLowerCase();
 			} else {
 				tester = user.isExclusion ? `NOT LIKE ?` : `LIKE ?`;
-				args = [user.search.toLowerCase() + '%'];
+				param = user.search.toLowerCase() + '%';
 			}
 
-			ors.push({query: `userid ${tester}`, args});
-			ors.push({query: `autoconfirmed_userid ${tester}`, args});
+			ors.push({query: `(userid ${tester} OR autoconfirmed_userid ${tester})`, args: [param, param]});
 			ors.push({
 				query: `EXISTS(SELECT * FROM alts WHERE alts.modlog_id = modlog.modlog_id AND alts.userid ${tester})`,
-				args,
+				args: [param],
 			});
 		}
 		return this.buildParallelIndexScanQuery(select, ors, ands, sortAndLimit);

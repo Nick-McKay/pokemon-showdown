@@ -168,7 +168,7 @@ function getMastermindGame(room: Room | null) {
 function getTriviaOrMastermindGame(room: Room | null) {
 	try {
 		return getMastermindGame(room);
-	} catch (e) {
+	} catch {
 		return getTriviaGame(room);
 	}
 }
@@ -187,7 +187,7 @@ function broadcast(room: BasicRoom, title: string, message?: string) {
 
 async function getQuestions(
 	categories: ID[] | 'random' | 'all',
-	order: 'random' | 'time',
+	order: 'newestfirst' | 'oldestfirst' | 'random',
 	limit = 1000
 ): Promise<TriviaQuestion[]> {
 	if (categories === 'random') {
@@ -376,7 +376,7 @@ export class Trivia extends Rooms.RoomGame {
 	constructor(
 		room: Room, mode: string, categories: ID[] | 'all', givesPoints: boolean,
 		length: keyof typeof LENGTHS | number, questions: TriviaQuestion[], creator: string,
-		isRandomMode = false, isSubGame = false,
+		isRandomMode = false, isSubGame = false, isRandomCategory = false,
 	) {
 		super(room, isSubGame);
 		this.playerTable = {};
@@ -390,13 +390,12 @@ export class Trivia extends Rooms.RoomGame {
 
 		this.categories = categories;
 		let category: string;
-		switch (this.categories[0]) {
+		switch (this.categories) {
 		case 'all':
 			category = this.room.tr`All`; break;
-		case 'random':
-			category = this.room.tr`Random (${ALL_CATEGORIES[questions[0].category]})`; break;
 		default:
-			category = (this.categories as ID[]).map(cat => ALL_CATEGORIES[CATEGORY_ALIASES[cat] || cat]).join(' + ');
+			category = this.categories.map(cat => ALL_CATEGORIES[CATEGORY_ALIASES[cat] || cat]).join(' + ');
+			if (isRandomCategory) category = this.room.tr`Random (${category})`;
 		}
 
 		this.game = {
@@ -624,7 +623,7 @@ export class Trivia extends Rooms.RoomGame {
 			if (!cap.questions && !cap.points) {
 				if (this.game.length === 'infinite') {
 					this.questions = await database.getQuestions(this.categories, 1000, {
-						order: this.game.mode.startsWith('Random') ? 'random' : 'time',
+						order: this.game.mode.startsWith('Random') ? 'random' : 'oldestfirst',
 					});
 				}
 				// If there's no score cap, we declare a winner when we run out of questions,
@@ -1530,12 +1529,16 @@ const triviaCommands: Chat.ChatCommands = {
 				const id = toID(cat);
 				return CATEGORY_ALIASES[id] || id;
 			});
-		if (categories[0] === 'all') categories = 'all';
-		if (categories[0] === 'random') categories = 'random';
-		if (categories.length > 1 && (categories.includes('all' as ID) || categories.includes('random' as ID))) {
-			throw new Chat.ErrorMessage(`You cannot combine all or random with another category.`);
+		if (categories[0] === 'all') {
+			if (categories.length > 1) throw new Chat.ErrorMessage(`You cannot combine all with another category.`);
+			categories = 'all';
+		} else if (categories[0] === 'random') {
+			if (categories.length > 1) throw new Chat.ErrorMessage(`You cannot combine random with another category.`);
+			categories = 'random';
 		}
-		const questions = await getQuestions(categories, randomizeQuestionOrder ? 'random' : 'time');
+		// Trivia questions are selected with .pop() so sorted fish needs
+		// oldest questions first.
+		const questions = await getQuestions(categories, randomizeQuestionOrder ? 'random' : 'oldestfirst');
 
 		let length: ID | number = toID(targets[2]);
 		if (!LENGTHS[length]) {
@@ -1572,8 +1575,12 @@ const triviaCommands: Chat.ChatCommands = {
 			_Trivia = TimerModeTrivia;
 		}
 
-		categories = categories === 'random' ? [questions[0].category] as ID[] : categories;
-		room.game = new _Trivia(room, mode, categories, givesPoints, length, questions, user.name, isRandomMode);
+		const isRandomCategory = categories === 'random';
+		categories = isRandomCategory ? [questions[0].category] as ID[] : categories as 'all' | ID[];
+		room.game = new _Trivia(
+			room, mode, categories, givesPoints, length, questions,
+			user.name, isRandomMode, false, isRandomCategory
+		);
 	},
 	newhelp: [
 		`/trivia new [mode], [categories], [length] - Begin a new Trivia game.`,
@@ -1622,7 +1629,7 @@ const triviaCommands: Chat.ChatCommands = {
 			const mastermindRound = getMastermindGame(room).currentRound;
 			if (!mastermindRound) throw new Error;
 			game = mastermindRound;
-		} catch (e) {
+		} catch {
 			game = getTriviaGame(room);
 		}
 
@@ -2009,7 +2016,7 @@ const triviaCommands: Chat.ChatCommands = {
 			return this.errorReply(this.tr`'${target}' is not a valid category. View /help trivia for more information.`);
 		}
 
-		const list = await database.getQuestions([category], Number.MAX_SAFE_INTEGER, {order: 'time'});
+		const list = await database.getQuestions([category], Number.MAX_SAFE_INTEGER, {order: 'newestfirst'});
 		if (!list.length) {
 			buffer += `<tr><td>${this.tr`There are no questions in the ${ALL_CATEGORIES[category]} category.`}</td></table></div>`;
 			return this.sendReply(buffer);
@@ -2305,7 +2312,7 @@ const triviaCommands: Chat.ChatCommands = {
 		try {
 			await mergeAlts(user.id, altid);
 			return this.sendReply(`Your Trivia leaderboard score has been transferred to '${altid}'!`);
-		} catch (err) {
+		} catch (err: any) {
 			if (!err.message.includes('/trivia mergescore')) throw err;
 
 			await requestAltMerge(altid, user.id);

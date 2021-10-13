@@ -66,7 +66,7 @@ export class LogReaderRoom {
 		try {
 			const listing = await FS(`logs/chat/${this.roomid}`).readdir();
 			return listing.filter(file => /^[0-9][0-9][0-9][0-9]-[0-9][0-9]$/.test(file));
-		} catch (err) {
+		} catch {
 			return [];
 		}
 	}
@@ -75,7 +75,7 @@ export class LogReaderRoom {
 		try {
 			const listing = await FS(`logs/chat/${this.roomid}/${month}`).readdir();
 			return listing.filter(file => file.endsWith(".txt")).map(file => file.slice(0, -4));
-		} catch (err) {
+		} catch {
 			return [];
 		}
 	}
@@ -212,7 +212,7 @@ export const LogReader = new class {
 				const days = (await FS(`logs/${month}/${tier}/`).readdir()).filter(this.isDay).sort();
 				firstDay = days[0];
 				break;
-			} catch (err) {}
+			} catch {}
 			months.shift();
 		}
 		if (!firstDay) return null;
@@ -225,7 +225,7 @@ export const LogReader = new class {
 				const days = (await FS(`logs/${month}/${tier}/`).readdir()).filter(this.isDay).sort();
 				lastDay = days[days.length - 1];
 				break;
-			} catch (err) {}
+			} catch {}
 			months.pop();
 		}
 		if (!lastDay) throw new Error(`getBattleLog month range search for ${tier}`);
@@ -242,7 +242,7 @@ export const LogReader = new class {
 				Utils.sortBy(battles, getBattleNum);
 
 				return [getBattleNum(battles[0]), getBattleNum(battles[battles.length - 1])];
-			} catch (err) {
+			} catch {
 				return null;
 			}
 		};
@@ -1085,7 +1085,7 @@ export class RipgrepLogSearcher extends Searcher {
 				cwd: `${__dirname}/../../`,
 			});
 			results = stdout.split(resultSep);
-		} catch (e) {
+		} catch (e: any) {
 			if (e.code !== 1 && !e.message.includes('stdout maxBuffer') && !e.message.includes('No such file or directory')) {
 				throw e; // 2 means an error in ripgrep
 			}
@@ -1230,7 +1230,7 @@ export class RipgrepLogSearcher extends Searcher {
 				const battleName = name.split('/').pop()!;
 				results.push(battleName.slice(0, -9));
 			}
-		} catch (e) {
+		} catch (e: any) {
 			if (e.code !== 1) throw e;
 		}
 		return results.filter(Boolean);
@@ -1268,7 +1268,7 @@ export const PM = new ProcessManager.QueryProcessManager<AnyObject, any>(module,
 			Monitor.slow(`[Slow chatlog query]: ${elapsedTime}ms: ${JSON.stringify(data)}`);
 		}
 		return result;
-	} catch (e) {
+	} catch (e: any) {
 		if (e.name?.endsWith('ErrorMessage')) {
 			return LogViewer.error(e.message);
 		}
@@ -1581,11 +1581,23 @@ export const commands: Chat.ChatCommands = {
 		if (target.startsWith('psim.us/')) target = target.slice(8);
 		return this.parse(`/join view-battlelog-${target}`);
 	},
+	battleloghelp: [
+		`/battlelog [battle link] - View the log of the given [battle link], even if the replay was not saved.`,
+		`Requires: % @ &`,
+	],
+
 	logsaccess(target, room, user) {
 		this.checkCan('rangeban');
 		const [type, userid] = target.split(',').map(toID);
 		return this.parse(`/j view-logsaccess-${type || 'all'}${userid ? `-${userid}` : ''}`);
 	},
+	logsaccesshelp: [
+		`/logsaccess [type], [user] - View chatlog access logs for the given [type] and [user].`,
+		`If no arguments are given, shows the entire access log.`,
+		`Requires: &`,
+	],
+
+
 	gcsearch: 'groupchatsearch',
 	async groupchatsearch(target, room, user) {
 		this.checkCan('lock');
@@ -1619,4 +1631,9 @@ export const commands: Chat.ChatCommands = {
 		if (!room) return this.errorReply(`Either use this command in the target room or specify a room.`);
 		return this.parse(`/join view-roominfo-${room}${date ? `--${date}` : ''}`);
 	},
+	roomactivityhelp: [
+		`/roomactibity [room][, date] - View room activity logs for the given room.`,
+		`If a date is provided, it searches for logs from that date. Otherwise, it searches the current month.`,
+		`Requires: &`,
+	],
 };

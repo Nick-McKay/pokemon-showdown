@@ -451,7 +451,7 @@ export class PageContext extends MessageContext {
 		try {
 			if (typeof handler !== 'function') this.pageDoesNotExist();
 			res = await handler.call(this, parts, this.user, this.connection);
-		} catch (err) {
+		} catch (err: any) {
 			if (err.name?.endsWith('ErrorMessage')) {
 				if (err.message) this.errorReply(err.message);
 				return;
@@ -598,7 +598,7 @@ export class CommandContext extends MessageContext {
 
 				message = this.checkChat(message);
 			}
-		} catch (err) {
+		} catch (err: any) {
 			if (err.name?.endsWith('ErrorMessage')) {
 				this.errorReply(err.message);
 				this.update();
@@ -851,6 +851,9 @@ export class CommandContext extends MessageContext {
 				this.room.addByUser(this.user, `(${msg})`);
 			} else {
 				this.room.sendModsByUser(this.user, `(${msg})`);
+				// roomlogging in staff causes a duplicate log message, since we do addByUser
+				// and roomlogging in pms has no effect, so we can _just_ call this here
+				this.roomlog(`(${msg})`);
 			}
 		} else {
 			const data = this.pmTransform(`|modaction|${msg}`);
@@ -859,7 +862,6 @@ export class CommandContext extends MessageContext {
 				this.pmTarget.send(data);
 			}
 		}
-		this.roomlog(`(${msg})`);
 	}
 	globalModlog(action: string, user: string | User | null = null, note: string | null = null, ip?: string) {
 		const entry: PartialModlogEntry = {
@@ -1071,7 +1073,11 @@ export class CommandContext extends MessageContext {
 			if (room) {
 				if (lockType && !room.settings.isHelp) {
 					this.sendReply(`|html|<a href="view-help-request--appeal" class="button">${this.tr`Get help with this`}</a>`);
-					throw new Chat.ErrorMessage(this.tr`You are ${lockType} and can't talk in chat. ${lockExpiration}`);
+					if (user.locked === '#hostfilter') {
+						throw new Chat.ErrorMessage(this.tr`You are locked due to your proxy / VPN and can't talk in chat.`);
+					} else {
+						throw new Chat.ErrorMessage(this.tr`You are ${lockType} and can't talk in chat. ${lockExpiration}`);
+					}
 				}
 				if (room.isMuted(user)) {
 					throw new Chat.ErrorMessage(this.tr`You are muted and cannot talk in this room.`);
@@ -1099,9 +1105,24 @@ export class CommandContext extends MessageContext {
 				}
 			}
 			if (targetUser) {
+				// this accounts for users who are autoconfirmed on another alt, but not registered
+				if (!(user.registered || user.autoconfirmed)) {
+					this.sendReply(
+						this.tr`|html|<div class="message-error">You must be registered to send private messages.</div>` +
+						this.tr`You may register in the <button name="openOptions"><i class="fa fa-cog"></i> Options</button> menu.`
+					);
+					throw new Chat.Interruption();
+				}
+				if (!(targetUser.registered || targetUser.autoconfirmed)) {
+					throw new Chat.ErrorMessage(this.tr`That user is unregistered and cannot be PMed.`);
+				}
 				if (lockType && !targetUser.can('lock')) {
 					this.sendReply(`|html|<a href="view-help-request--appeal" class="button">${this.tr`Get help with this`}</a>`);
-					throw new Chat.ErrorMessage(this.tr`You are ${lockType} and can only private message members of the global moderation team. ${lockExpiration}`);
+					if (user.locked === '#hostfilter') {
+						throw new Chat.ErrorMessage(this.tr`You are locked due to your proxy / VPN and can only private message members of the global moderation team.`);
+					} else {
+						throw new Chat.ErrorMessage(this.tr`You are ${lockType} and can only private message members of the global moderation team. ${lockExpiration}`);
+					}
 				}
 				if (targetUser.locked && !user.can('lock')) {
 					throw new Chat.ErrorMessage(this.tr`The user "${targetUser.name}" is locked and cannot be PMed.`);
@@ -1142,7 +1163,7 @@ export class CommandContext extends MessageContext {
 			/[\u0300-\u036f\u0483-\u0489\u0610-\u0615\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06ED\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]{3,}/g,
 			''
 		);
-		if (/[\u115f\u1160\u239b-\u23b9]/.test(message)) {
+		if (/[\u3164\u115f\u1160\u239b-\u23b9]/.test(message)) {
 			throw new Chat.ErrorMessage(this.tr`Your message contains banned characters.`);
 		}
 
@@ -1179,6 +1200,14 @@ export class CommandContext extends MessageContext {
 			throw new Chat.ErrorMessage(gameFilter);
 		}
 
+		if (room?.settings.highTraffic &&
+			toID(message).replace(/[^a-z]+/, '').length < 2 &&
+			!user.can('show', null, room)) {
+			throw new Chat.ErrorMessage(
+				this.tr`Due to this room being a high traffic room, your message must contain at least two letters.`
+			);
+		}
+
 		if (room) {
 			const normalized = message.trim();
 			if (
@@ -1191,14 +1220,6 @@ export class CommandContext extends MessageContext {
 			user.lastMessageTime = Date.now();
 		}
 
-		if (room?.settings.highTraffic &&
-			toID(message).replace(/[^a-z]+/, '').length < 2 &&
-			!user.can('show', null, room)) {
-			throw new Chat.ErrorMessage(
-				this.tr`Due to this room being a high traffic room, your message must contain at least two letters.`
-			);
-		}
-
 		if (Chat.filters.length) {
 			return this.filter(message);
 		}
@@ -1207,6 +1228,7 @@ export class CommandContext extends MessageContext {
 	}
 	checkCanPM(targetUser: User, user?: User) {
 		if (!user) user = this.user;
+		if (user.id === targetUser.id) return true; // lol.
 		const setting = targetUser.settings.blockPMs;
 		if (user.can('lock') || !setting) return true;
 		if (setting === true && !user.can('lock')) return false; // this is to appease TS
@@ -1696,18 +1718,14 @@ export const Chat = new class {
 		if (!PM.isParentProcess) return; // We don't need a database in a subprocess that requires Chat.
 		if (!Config.usesqlite) return;
 		// check if we have the db_info table, which will always be present unless the schema needs to be initialized
-		let statement = await this.database.prepare(
+		const {hasDBInfo} = await this.database.get(
 			`SELECT count(*) AS hasDBInfo FROM sqlite_master WHERE type = 'table' AND name = 'db_info'`
 		);
-		if (!statement) return; // I was told this is a best practice for the SQL library
-		const {hasDBInfo} = await this.database.get(statement);
 		if (!hasDBInfo) await this.database.runFile('./databases/schemas/chat-plugins.sql');
 
-		statement = await this.database.prepare(
+		const result = await this.database.get(
 			`SELECT value as curVersion FROM db_info WHERE key = 'version'`
 		);
-		if (!statement) return;
-		const result = await this.database.get(statement);
 		const curVersion = parseInt(result.curVersion);
 		if (!curVersion) throw new Error(`db_info table is present, but schema version could not be parsed`);
 
@@ -2006,6 +2024,7 @@ export const Chat = new class {
 		let curCommands: AnnotatedChatCommands = Chat.commands;
 		let commandHandler;
 		let fullCmd = cmd;
+		let prevCmdName = '';
 
 		do {
 			if (cmd in curCommands) {
@@ -2023,13 +2042,17 @@ export const Chat = new class {
 				[cmd, target] = Utils.splitFirst(target, ' ');
 				cmd = cmd.toLowerCase();
 
+				prevCmdName = fullCmd;
 				fullCmd += ' ' + cmd;
 				curCommands = commandHandler as AnnotatedChatCommands;
 			}
 		} while (commandHandler && typeof commandHandler === 'object');
 
-		if (!commandHandler && curCommands.default) {
-			commandHandler = curCommands.default;
+		if (!commandHandler && (curCommands.default || curCommands[''])) {
+			commandHandler = curCommands.default || curCommands[''];
+			fullCmd = prevCmdName;
+			target = `${cmd}${target ? ` ${target}` : ''}`;
+			cmd = fullCmd.split(' ').shift()!;
 			if (typeof commandHandler === 'string') {
 				commandHandler = curCommands[commandHandler];
 			}
@@ -2098,7 +2121,7 @@ export const Chat = new class {
 		try {
 			// eslint-disable-next-line no-new
 			new RegExp(word);
-		} catch (e) {
+		} catch (e: any) {
 			throw new Chat.ErrorMessage(
 				e.message.startsWith('Invalid regular expression: ') ?
 					e.message :
@@ -2401,6 +2424,29 @@ export const Chat = new class {
 		const ratio = Math.min(maxHeight / height, maxWidth / width);
 
 		return [Math.round(width * ratio), Math.round(height * ratio), true];
+	}
+
+	refreshPageFor(
+		pageid: string,
+		roomid: Room | RoomID,
+		checkPrefix = false,
+		ignoreUsers: ID[] | null = null
+	) {
+		const room = Rooms.get(roomid);
+		if (!room) return false;
+		for (const id in room.users) {
+			if (ignoreUsers?.includes(id as ID)) continue;
+			const u = room.users[id];
+			for (const conn of u.connections) {
+				if (conn.openPages) {
+					for (const page of conn.openPages) {
+						if ((checkPrefix ? page.startsWith(pageid) : page === pageid)) {
+							void this.parse(`/j view-${page}`, room, u, conn);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	/**
