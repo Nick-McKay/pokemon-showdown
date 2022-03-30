@@ -26,7 +26,9 @@ export function getCommonBattles(
 			(user1?.inRooms.has(curRoom.roomid) || curRoom.auth.get(userID1) === Users.PLAYER_SYMBOL) &&
 			(user2?.inRooms.has(curRoom.roomid) || curRoom.auth.get(userID2) === Users.PLAYER_SYMBOL)
 		) {
-			if (connection) void curRoom.uploadReplay(connection.user, connection, "forpunishment");
+			if (connection) {
+				void curRoom.uploadReplay(connection.user, connection, "forpunishment");
+			}
 			battles.push(curRoom.roomid);
 		}
 	}
@@ -243,7 +245,7 @@ export const commands: Chat.ChatCommands = {
 						status.push(punishMsg);
 					}
 				}
-				if (Punishments.sharedIps.has(ip)) {
+				if (Punishments.isSharedIp(ip)) {
 					let sharedStr = 'shared';
 					if (Punishments.sharedIps.get(ip)) {
 						sharedStr += `: ${Punishments.sharedIps.get(ip)}`;
@@ -474,7 +476,7 @@ export const commands: Chat.ChatCommands = {
 			// ip
 			this.sendReply(`Users with IP ${ipOrHost}${targetRoom ? ` in the room ${targetRoom.title}` : ``}:`);
 			for (const curUser of Users.users.values()) {
-				if (curUser.latestIp !== ipOrHost) continue;
+				if (!curUser.ips.some(ip => ip === ipOrHost)) continue;
 				if (targetRoom && !curUser.inRooms.has(targetRoom.roomid)) continue;
 				results.push(`${curUser.connected ? ONLINE_SYMBOL : OFFLINE_SYMBOL} ${curUser.name}`);
 			}
@@ -484,7 +486,7 @@ export const commands: Chat.ChatCommands = {
 			const checker = IPTools.checker(ipOrHost);
 			for (const curUser of Users.users.values()) {
 				if (results.length > 100 && !isAll) continue;
-				if (!checker(curUser.latestIp)) continue;
+				if (!curUser.ips.some(ip => checker(ip))) continue;
 				if (targetRoom && !curUser.inRooms.has(targetRoom.roomid)) continue;
 				results.push(`${curUser.connected ? ONLINE_SYMBOL : OFFLINE_SYMBOL} ${curUser.name}`);
 			}
@@ -1590,10 +1592,19 @@ export const commands: Chat.ChatCommands = {
 			`<strong>globalban</strong> - Globally bans (makes them unable to connect and play games) for a week.`,
 		];
 
+		const indefinitePunishments = [
+			this.tr`<strong>Indefinite global punishments</strong>:`,
+			this.tr`<strong>permalock</strong> - Issued for repeated instances of bad behavior and is rarely the result of a single action. ` +
+				this.tr`These can be appealed in the <a href="https://www.smogon.com/forums/threads/discipline-appeal-rules.3583479/">Discipline Appeal</a>` +
+				this.tr` forum after at least 3 months without incident.`,
+			this.tr`<strong>permaban</strong> - Unappealable global ban typically issued for the most severe cases of offensive/inappropriate behavior.`,
+		];
+
 		this.sendReplyBox(
 			(showRoom ? roomPunishments.map(str => this.tr(str)).join('<br />') : ``) +
 			(showRoom && showGlobal ? `<br /><br />` : ``) +
-			(showGlobal ? globalPunishments.map(str => this.tr(str)).join('<br />') : ``)
+			(showGlobal ? globalPunishments.map(str => this.tr(str)).join('<br />') : ``) +
+			(showGlobal ? `<br /><br />${indefinitePunishments.join('<br />')}` : ``)
 		);
 	},
 	punishmentshelp: [
@@ -1667,15 +1678,6 @@ export const commands: Chat.ChatCommands = {
 	},
 	bugshelp: [`/bugs - Links to the various bug reporting services.`],
 
-	avatars(target, room, user) {
-		if (!this.runBroadcast()) return;
-		this.sendReplyBox(`You can <button name="avatars">change your avatar</button> by clicking on it in the <button name="openOptions"><i class="fa fa-cog"></i> Options</button> menu in the upper right. Custom avatars are only obtainable by staff.`);
-	},
-	avatarshelp: [
-		`/avatars - Explains how to change avatars.`,
-		`!avatars - Show everyone that information. Requires: + % @ # &`,
-	],
-
 	optionbutton: 'optionsbutton',
 	optionsbutton(target, room, user) {
 		if (!this.runBroadcast()) return;
@@ -1714,9 +1716,9 @@ export const commands: Chat.ChatCommands = {
 	smogintro(target, room, user) {
 		if (!this.runBroadcast()) return;
 		this.sendReplyBox(
-			`Welcome to Smogon's official simulator! The <a href="https://www.smogon.com/forums/forums/264">Smogon Info / Intro Hub</a> can help you get integrated into the community.<br />` +
+			`Welcome to Smogon's official simulator! The <a href="https://www.smogon.com/forums/forums/intro_hub">Information & Resources forum</a> can help you get integrated into the community.<br />` +
 			`- <a href="https://www.smogon.com/forums/threads/3526346">Useful Smogon Info</a><br />` +
-			`- <a href="https://www.smogon.com/forums/threads/3498332">Tiering FAQ</a><br />`
+			`- <a href="https://www.smogon.com/forums/threads/3644714">Tiering FAQ</a><br />`
 		);
 	},
 	smogintrohelp: [`/smogintro - Provides an introduction to Smogon.`],
@@ -1760,7 +1762,7 @@ export const commands: Chat.ChatCommands = {
 			);
 		}
 		this.sendReplyBox(
-			`Pok&eacute;mon Showdown! damage calculator. (Courtesy of Honko &amp; Austin)<br />` +
+			`Pok&eacute;mon Showdown! damage calculator. (Courtesy of Honko, Austin, &amp; Kris)<br />` +
 			`- <a href="https://calc.pokemonshowdown.com/index.html">Damage Calculator</a>`
 		);
 	},
@@ -2143,7 +2145,9 @@ export const commands: Chat.ChatCommands = {
 				formatName = formatName.slice(8);
 				formatId = toID(formatName);
 			}
-			if (formatId === 'battlespotdoubles') {
+			if (formatId === 'anythinggoes') {
+				formatId = 'ag';
+			} else if (formatId === 'battlespotdoubles') {
 				formatId = 'battle_spot_doubles';
 			} else if (formatId === 'battlespottriples') {
 				formatId = 'battle_spot_triples';
@@ -2160,7 +2164,7 @@ export const commands: Chat.ChatCommands = {
 				formatId = 'uber';
 			} else if (formatId.includes('vgc')) {
 				formatId = 'vgc' + formatId.slice(-2);
-				formatName = 'VGC20' + formatId.slice(-2);
+				formatName = 'VGC 20' + formatId.slice(-2);
 			} else if (extraFormat.effectType !== 'Format') {
 				formatName = formatId = '';
 			}
@@ -2171,9 +2175,9 @@ export const commands: Chat.ChatCommands = {
 				german: 'de',
 				portuguese: 'pt',
 			};
-			let id = pokemon.id;
+			let id = pokemon.name.toLowerCase();
 			// Special case for Meowstic-M
-			if (id === 'meowstic') id = 'meowsticm' as ID;
+			if (id === 'meowstic') id = 'meowstic-m';
 			if (['ou', 'uu'].includes(formatId) && generation === 'sm' &&
 				room?.settings.language && room.settings.language in supportedLanguages) {
 				// Limited support for translated analysis
@@ -2214,7 +2218,13 @@ export const commands: Chat.ChatCommands = {
 		if (format.id) {
 			let formatName = format.name;
 			let formatId: string = format.id;
-			if (formatId === 'battlespotdoubles') {
+			if (formatName.startsWith('[Gen ') && formatName.slice(6, 8) === '] ') {
+				formatName = formatName.slice(8);
+				formatId = toID(formatName);
+			}
+			if (formatId === 'anythinggoes') {
+				formatId = 'ag';
+			} else if (formatId === 'battlespotdoubles') {
 				formatId = 'battle_spot_doubles';
 			} else if (formatId === 'battlespottriples') {
 				formatId = 'battle_spot_triples';
@@ -2231,7 +2241,7 @@ export const commands: Chat.ChatCommands = {
 				formatId = 'uber';
 			} else if (formatId.includes('vgc')) {
 				formatId = `vgc${formatId.slice(-2)}`;
-				formatName = `VGC20${formatId.slice(-2)}`;
+				formatName = `VGC 20${formatId.slice(-2)}`;
 			} else if (format.effectType !== 'Format') {
 				formatName = formatId = '';
 			}
@@ -2603,7 +2613,7 @@ export const commands: Chat.ChatCommands = {
 			return this.errorReply(`You are using this command too quickly. Wait a bit and try again.`);
 		}
 
-		const [link, comment] = Utils.splitFirst(target, ',');
+		const [link, comment] = Utils.splitFirst(target, ',').map(f => f.trim());
 
 		let buf;
 		if (YouTube.linkRegex.test(link)) {
@@ -2628,7 +2638,12 @@ export const commands: Chat.ChatCommands = {
 				return this.errorReply('Invalid image');
 			}
 		}
-		if (comment) buf += Utils.html`<br />(${comment.trim()})</div>`;
+		if (comment) {
+			if (this.checkChat(comment) !== comment) {
+				return this.errorReply(`You cannot use filtered words in comments.`);
+			}
+			buf += Utils.html`<br />(${comment})</div>`;
+		}
 
 		this.checkBroadcast();
 		if (this.broadcastMessage) {
@@ -2774,7 +2789,7 @@ export const pages: Chat.PageTable = {
 			`<h3>Value rules</h3>`,
 			`<ul><li>Value rules are formatted like [Name] = [value], e.g. "Force Monotype = Water" or "Min Team Size = 4"</li>`,
 			`<li>To remove a value rule, use <code>![rule name]</code>.</li>`,
-			`<li>To override another value rule, use <code>!! [Name] = [new value]</code>. For example, overriding the Min Source Gen on [Gen 8] VGC 2021 Series 10 from 8 to 3 would look like <code>!! Min Source Gen = 3</code>.</li></ul>`,
+			`<li>To override another value rule, use <code>!! [Name] = [new value]</code>. For example, overriding the Min Source Gen on [Gen 8] VGC 2021 from 8 to 3 would look like <code>!! Min Source Gen = 3</code>.</li></ul>`,
 			`<div class="ladder"><table><tr><th>Rule Name</th><th>Description</th></tr>`
 		);
 		for (const rule of rules) {

@@ -10,6 +10,8 @@
 import {Dex, toID} from './dex';
 import {Utils} from '../lib';
 import {Tags} from '../data/tags';
+import {Teams} from './teams';
+import {PRNG} from './prng';
 
 /**
  * Describes a possible way to get a pokemon. Is not exhaustive!
@@ -236,6 +238,16 @@ export class TeamValidator {
 					`If you're not using a custom client, please report this as a bug. If you are, remember to use \`/utm null\` before starting a game in this format.`,
 				];
 			}
+			const testTeamSeed = PRNG.generateSeed();
+			try {
+				const testTeamGenerator = Teams.getGenerator(format, testTeamSeed);
+				testTeamGenerator.getTeam(options); // Throws error if generation fails
+			} catch (e) {
+				return [
+					`${format.name}'s team generator (${format.team}) failed using these rules and seed (${testTeamSeed}):-`,
+					`${e}`,
+				];
+			}
 			return null;
 		}
 		if (!team) {
@@ -338,6 +350,24 @@ export class TeamValidator {
 
 		if (!problems.length) return null;
 		return problems;
+	}
+
+	getEventOnlyData(species: Species, noRecurse?: boolean): {species: Species, eventData: EventInfo[]} | null {
+		const dex = this.dex;
+		const learnset = dex.species.getLearnsetData(species.id);
+		if (!learnset?.eventOnly) {
+			if (noRecurse) return null;
+			return this.getEventOnlyData(dex.species.get(species.prevo), true);
+		}
+
+		if (!learnset.eventData && species.forme) {
+			return this.getEventOnlyData(dex.species.get(species.baseSpecies), true);
+		}
+		if (!learnset.eventData) {
+			throw new Error(`Event-only species ${species.name} has no eventData table`);
+		}
+
+		return {species, eventData: learnset.eventData};
 	}
 
 	validateSet(set: PokemonSet, teamHas: AnyObject): string[] | null {
@@ -506,7 +536,10 @@ export class TeamValidator {
 		problem = this.checkItem(set, item, setHas);
 		if (problem) problems.push(problem);
 		if (ruleTable.has('obtainablemisc')) {
-			if (dex.gen <= 1 || ruleTable.has('allowavs')) {
+			if (dex.gen === 4 && item.id === 'griseousorb' && species.num !== 487) {
+				problems.push(`${set.name} cannot hold the Griseous Orb.`, `(In Gen 4, only Giratina could hold the Griseous Orb).`);
+			}
+			if (dex.gen <= 1) {
 				if (item.id) {
 					// no items allowed
 					set.item = '';
@@ -598,6 +631,7 @@ export class TeamValidator {
 		}
 
 		const learnsetSpecies = dex.species.getLearnsetData(outOfBattleSpecies.id);
+		let eventOnlyData;
 
 		if (!setSources.sourcesBefore && setSources.sources.length) {
 			let legal = false;
@@ -629,13 +663,8 @@ export class TeamValidator {
 					if (eventProblems) problems.push(...eventProblems);
 				}
 			}
-		} else if (ruleTable.has('obtainablemisc') && learnsetSpecies.eventOnly) {
-			const eventSpecies = !learnsetSpecies.eventData &&
-			outOfBattleSpecies.baseSpecies !== outOfBattleSpecies.name ?
-				dex.species.get(outOfBattleSpecies.baseSpecies) : outOfBattleSpecies;
-			const eventData = learnsetSpecies.eventData ||
-				dex.species.getLearnsetData(eventSpecies.id).eventData;
-			if (!eventData) throw new Error(`Event-only species ${species.name} has no eventData table`);
+		} else if (ruleTable.has('obtainablemisc') && (eventOnlyData = this.getEventOnlyData(outOfBattleSpecies))) {
+			const {species: eventSpecies, eventData} = eventOnlyData;
 			let legal = false;
 			for (const event of eventData) {
 				if (this.validateEvent(set, event, eventSpecies)) continue;
@@ -1519,6 +1548,19 @@ export class TeamValidator {
 
 		setHas['ability:' + ability.id] = true;
 
+		if (this.format.id === 'gen8pokebilities') {
+			const species = dex.species.get(set.species);
+			const unSeenAbilities = Object.keys(species.abilities)
+				.filter(key => key !== 'S' && (key !== 'H' || !species.unreleasedHidden))
+				.map(key => species.abilities[key as "0" | "1" | "H" | "S"]);
+
+			if (ability.id !== this.toID(species.abilities['S'])) {
+				for (const abilityName of unSeenAbilities) {
+					setHas['ability:' + toID(abilityName)] = true;
+				}
+			}
+		}
+
 		let banReason = ruleTable.check('ability:' + ability.id);
 		if (banReason) {
 			return `${set.name}'s ability ${ability.name} is ${banReason}.`;
@@ -1880,7 +1922,7 @@ export class TeamValidator {
 		/**
 		 * The format allows Sketch to copy moves in Gen 8
 		 */
-		const canSketchGen8Moves = ruleTable.has('sketchgen8moves');
+		const canSketchGen8Moves = ruleTable.has('sketchgen8moves') || this.dex.currentMod === 'gen8bdsp';
 
 		let tradebackEligible = false;
 		while (species?.name && !alreadyChecked[species.id]) {

@@ -16,6 +16,19 @@ interface BattleFactorySet {
 	evs?: Partial<StatsTable>;
 	ivs?: Partial<StatsTable>;
 }
+
+const ZeroAttackHPIVs: {[k: string]: SparseStatsTable} = {
+	grass: {hp: 30, spa: 30},
+	fire: {spa: 30, spe: 30},
+	ice: {def: 30},
+	ground: {spa: 30, spd: 30},
+	fighting: {def: 30, spa: 30, spd: 30, spe: 30},
+	electric: {def: 30, spe: 30},
+	psychic: {spe: 30},
+	flying: {spa: 30, spd: 30, spe: 30},
+	rock: {def: 30, spd: 30, spe: 30},
+};
+
 export class RandomGen7Teams extends RandomTeams {
 	constructor(format: Format | string, prng: PRNG | PRNGSeed | null) {
 		super(format, prng);
@@ -422,7 +435,11 @@ export class RandomGen7Teams extends RandomTeams {
 		case 'endeavor':
 			return {cull: !isLead && !abilities.has('Defeatist')};
 		case 'explosion':
-			return {cull: !!counter.setupType || moves.has('wish') || abilities.has('Refrigerate') && moves.has('freezedry')};
+			return {cull: (
+				!!counter.setupType ||
+				moves.has('wish') ||
+				(abilities.has('Refrigerate') && (moves.has('freezedry') || movePool.includes('return')))
+			)};
 		case 'extremespeed': case 'skyattack':
 			return {cull: moves.has('substitute') || counter.setupType !== 'Physical' && moves.has('vacuumwave')};
 		case 'facade':
@@ -506,6 +523,7 @@ export class RandomGen7Teams extends RandomTeams {
 			return {cull: (
 				counter.get('Physical') + counter.get('Special') < 2 ||
 				hasRestTalk ||
+				moves.has('rest') ||
 				(!types.has('Water') && !counter.get('Water'))
 			)};
 		case 'sunnyday':
@@ -705,7 +723,7 @@ export class RandomGen7Teams extends RandomTeams {
 		if (ability === 'Harvest' || ability === 'Emergency Exit' && !!counter.get('Status')) return 'Sitrus Berry';
 		if (ability === 'Imposter') return 'Choice Scarf';
 		if (ability === 'Poison Heal') return 'Toxic Orb';
-		if (species.evos.length) return (ability === 'Technician' && counter.get('Physical') >= 4) ? 'Choice Band' : 'Eviolite';
+		if (species.nfe) return (ability === 'Technician' && counter.get('Physical') >= 4) ? 'Choice Band' : 'Eviolite';
 		if (moves.has('switcheroo') || moves.has('trick')) {
 			if (species.baseStats.spe >= 60 && species.baseStats.spe <= 108) {
 				return 'Choice Scarf';
@@ -1331,7 +1349,7 @@ export class RandomGen7Teams extends RandomTeams {
 				// Banned Ability
 				Dugtrio: 82, Gothitelle: 82, Pelipper: 84, Politoed: 84, Torkoal: 84, Wobbuffet: 82,
 				// Holistic judgement
-				'Castform-Rainy': 100, 'Castform-Snowy': 100, 'Castform-Sunny': 100, Delibird: 100, Spinda: 100, Unown: 100,
+				'Castform-Rainy': 100, 'Castform-Snowy': 100, 'Castform-Sunny': 100, Delibird: 100, Luvdisc: 100, Spinda: 100, Unown: 100,
 			};
 			const tier = toID(species.tier).replace('bl', '');
 			level = levelScale[tier] || (species.nfe ? 90 : 80);
@@ -1411,6 +1429,20 @@ export class RandomGen7Teams extends RandomTeams {
 			ivs.spe = 0;
 		}
 
+		// Fix IVs for non-Bottle Cap-able sets
+		if (hasHiddenPower && level < 100) {
+			let hpType;
+			for (const move of moves) {
+				if (move.startsWith('hiddenpower')) hpType = move.substr(11);
+			}
+			if (!hpType) throw new Error(`hasHiddenPower is true, but no Hidden Power move was found.`);
+			const HPivs = ivs.atk === 0 ? ZeroAttackHPIVs[hpType] : this.dex.types.get(hpType).HPivs;
+			let iv: StatID;
+			for (iv in HPivs) {
+				ivs[iv] = HPivs[iv]!;
+			}
+		}
+
 		return {
 			name: species.baseSpecies,
 			species: forme,
@@ -1426,6 +1458,8 @@ export class RandomGen7Teams extends RandomTeams {
 	}
 
 	randomTeam() {
+		this.enforceNoDirectCustomBanlistChanges();
+
 		const seed = this.prng.seed;
 		const ruleTable = this.dex.formats.getRuleTable(this.format);
 		const pokemon = [];
@@ -1698,6 +1732,8 @@ export class RandomGen7Teams extends RandomTeams {
 	}
 
 	randomFactoryTeam(side: PlayerOptions, depth = 0): RandomTeamsTypes.RandomFactorySet[] {
+		this.enforceNoDirectCustomBanlistChanges();
+
 		const forceResult = (depth >= 4);
 		const isMonotype = !!this.forceMonotype || this.dex.formats.getRuleTable(this.format).has('sametypeclause');
 
@@ -1985,6 +2021,8 @@ export class RandomGen7Teams extends RandomTeams {
 	}
 
 	randomBSSFactoryTeam(side: PlayerOptions, depth = 0): RandomTeamsTypes.RandomFactorySet[] {
+		this.enforceNoDirectCustomBanlistChanges();
+
 		const forceResult = (depth >= 4);
 
 		const pokemon = [];

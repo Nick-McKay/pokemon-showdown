@@ -82,7 +82,7 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 				if (this.effectState.duration === 1) {
 					this.add('-end', pokemon, 'Bide');
 					if (!this.effectState.totalDamage) {
-						this.debug("Bide failed due to 0 damage taken");
+						this.debug("Bide failed because no damage was taken");
 						this.add('-fail', pokemon);
 						return false;
 					}
@@ -196,12 +196,10 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 	},
 	conversion: {
 		inherit: true,
-		volatileStatus: 'conversion',
-		accuracy: true,
 		target: "normal",
 		onHit(target, source) {
-			source.types = target.types;
-			this.add('-start', source, 'typechange', source.types.join(', '), '[from] move: Conversion', '[of] ' + source);
+			source.setType(target.getTypes(true));
+			this.add('-start', source, 'typechange', source.types.join('/'), '[from] move: Conversion', '[of] ' + target);
 		},
 	},
 	counter: {
@@ -407,8 +405,7 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 				pokemon.clearBoosts();
 
 				if (pokemon !== source) {
-					// Clears the status from the opponent
-					pokemon.setStatus('');
+					pokemon.cureStatus(true);
 				}
 				if (pokemon.status === 'tox') {
 					pokemon.setStatus('psn');

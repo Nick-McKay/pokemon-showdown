@@ -1,4 +1,4 @@
-// Note: These are the rules that formats use
+﻿// Note: These are the rules that formats use
 
 import {Utils} from "../lib";
 
@@ -791,13 +791,51 @@ export const Rulesets: {[k: string]: FormatData} = {
 			];
 		},
 	},
-	"3batonpassclause": {
+	onebatonpassclause: {
 		effectType: 'ValidatorRule',
-		name: '3 Baton Pass Clause',
-		desc: "Stops teams from having more than three Pok&eacute;mon with Baton Pass",
-		banlist: ["Baton Pass > 3"],
+		name: 'One Baton Pass Clause',
+		desc: "Stops teams from having more than one Pok&eacute;mon with Baton Pass",
+		banlist: ["Baton Pass > 1"],
 		onBegin() {
-			this.add('rule', '3 Baton Pass Clause: Limit three Baton Passers');
+			this.add('rule', 'One Baton Pass Clause: Limit one Baton Passer');
+		},
+	},
+	oneboostpasserclause: {
+		effectType: 'ValidatorRule',
+		name: 'One Boost Passer Clause',
+		desc: "Stops teams from having a Pok&eacute;mon with Baton Pass that has multiple ways to boost its stats, and no more than one Baton Passer may be able to boost its stats",
+		onBegin() {
+			this.add('rule', 'One Boost Passer Clause: Limit one Baton Passer that has a way to boost its stats');
+		},
+		onValidateTeam(team) {
+			const boostingEffects = [
+				'acidarmor', 'agility', 'amnesia', 'apicotberry', 'barrier', 'bellydrum', 'bulkup', 'calmmind', 'cosmicpower', 'curse',
+				'defensecurl', 'dragondance', 'ganlonberry', 'growth', 'harden', 'howl', 'irondefense', 'liechiberry', 'meditate',
+				'petayaberry', 'salacberry', 'sharpen', 'speedboost', 'starfberry', 'swordsdance', 'tailglow', 'withdraw',
+			];
+			let passers = 0;
+			for (const set of team) {
+				if (!set.moves.includes('Baton Pass')) continue;
+				let passableBoosts = 0;
+				const item = this.toID(set.item);
+				const ability = this.toID(set.ability);
+				for (const move of set.moves) {
+					if (boostingEffects.includes(this.toID(move))) passableBoosts++;
+				}
+				if (boostingEffects.includes(item)) passableBoosts++;
+				if (boostingEffects.includes(ability)) passableBoosts++;
+				if (passableBoosts === 1) passers++;
+				if (passableBoosts > 1) {
+					return [
+						`${set.name || set.species} has Baton Pass and multiple ways to boost its stats, which is banned by One Boost Passer Clause.`,
+					];
+				}
+				if (passers > 1) {
+					return [
+						`Multiple Pokemon have Baton Pass and a way to boost their stats, which is banned by One Boost Passer Clause.`,
+					];
+				}
+			}
 		},
 	},
 	cfzclause: {
@@ -1089,7 +1127,9 @@ export const Rulesets: {[k: string]: FormatData} = {
 			if (!nonstandard && !move.isZ && !move.isMax && !this.ruleTable.isRestricted(`move:${move.id}`)) {
 				const speciesTypes: string[] = [];
 				const moveTypes: string[] = [];
-				for (let i = this.dex.gen; i >= species.gen && i >= move.gen; i--) {
+				// BDSP can't import Pokemon from Home, so it shouldn't grant moves from archaic species types
+				const minObtainableSpeciesGen = this.dex.currentMod === 'gen8bdsp' ? this.dex.gen : species.gen;
+				for (let i = this.dex.gen; i >= minObtainableSpeciesGen && i >= move.gen; i--) {
 					const dex = this.dex.forGen(i);
 					moveTypes.push(dex.moves.get(move.name).type);
 
@@ -1177,6 +1217,27 @@ export const Rulesets: {[k: string]: FormatData} = {
 					`You are limited to 1 of ${moveName} by Sketch Clause.\n(You have sketched ${moveName} ${count} times.)`
 				));
 			}
+		},
+	},
+	camomonsmod: {
+		effectType: 'Rule',
+		name: 'Camomons Mod',
+		desc: `Pok&eacute;mon have their types set to match their first two moves.`,
+		onBegin() {
+			this.add('rule', 'Camomons Mod: Pok\u00e9mon have their types set to match their first two moves.');
+		},
+		onModifySpeciesPriority: 2,
+		onModifySpecies(species, target, source, effect) {
+			if (!target) return; // Chat command
+			if (effect && ['imposter', 'transform'].includes(effect.id)) return;
+			const types = [...new Set(target.baseMoveSlots.slice(0, 2).map(move => this.dex.moves.get(move.id).type))];
+			return {...species, types: types};
+		},
+		onSwitchIn(pokemon) {
+			this.add('-start', pokemon, 'typechange', (pokemon.illusion || pokemon).getTypes(true).join('/'), '[silent]');
+		},
+		onAfterMega(pokemon) {
+			this.add('-start', pokemon, 'typechange', (pokemon.illusion || pokemon).getTypes(true).join('/'), '[silent]');
 		},
 	},
 	allowtradeback: {
@@ -1622,6 +1683,78 @@ export const Rulesets: {[k: string]: FormatData} = {
 		},
 		onFaint(target) {
 			this.lose(target.side);
+		},
+	},
+	tiershiftmod: {
+		effectType: "Rule",
+		name: "Tier Shift Mod",
+		desc: `Pok&eacute;mon below OU get their stats, excluding HP, boosted. UU/RUBL get +10, RU/NUBL get +20, NU/PUBL get +30, and PU or lower get +40.`,
+		ruleset: ['Overflow Stat Mod'],
+		onBegin() {
+			this.add('rule', 'Tier Shift Mod: Pok\u00e9mon get stat buffs depending on their tier, excluding HP.');
+		},
+		onModifySpecies(species, target, source, effect) {
+			if (!species.baseStats) return;
+			const boosts: {[tier: string]: number} = {
+				uu: 10,
+				rubl: 10,
+				ru: 20,
+				nubl: 20,
+				nu: 30,
+				publ: 30,
+				pu: 40,
+				nfe: 40,
+				lc: 40,
+			};
+			let tier: string = this.toID(species.tier);
+			if (!(tier in boosts)) return;
+			// Non-Pokemon bans in lower tiers
+			if (target) {
+				if (target.set.item === 'lightclay') return;
+				if (['drizzle', 'drought', 'snowwarning'].includes(target.set.ability) && boosts[tier] > 20) tier = 'nubl';
+			}
+			const pokemon = this.dex.deepClone(species);
+			pokemon.bst = pokemon.baseStats['hp'];
+			const boost = boosts[tier];
+			let statName: StatID;
+			for (statName in pokemon.baseStats as StatsTable) {
+				if (statName === 'hp') continue;
+				pokemon.baseStats[statName] = this.clampIntRange(pokemon.baseStats[statName] + boost, 1, 255);
+				pokemon.bst += pokemon.baseStats[statName];
+			}
+			return pokemon;
+		},
+	},
+	revelationmonsmod: {
+		effectType: "Rule",
+		name: "Revelationmons Mod",
+		desc: `The moves in the first slot(s) of a Pok&eacute;mon's set have their types changed to match the Pok&eacute;mon's type(s).`,
+		onBegin() {
+			this.add('rule', 'Revelationmons Mod: The first moveslots have their types changed to match the Pok\u00e9mon\'s types');
+		},
+		onValidateSet(set) {
+			const species = this.dex.species.get(set.species);
+			const slotIndex = species.types.length - 1;
+			const problems = [];
+			for (const [i, moveid] of set.moves.entries()) {
+				const move = this.dex.moves.get(moveid);
+				if (!this.ruleTable.isRestricted(`move:${move.id}`)) continue;
+				if (i <= slotIndex) {
+					problems.push(`${move.name} can't be in moveslot ${i + 1} because it's restricted from being in the first ${slotIndex + 1 > 1 ? `${slotIndex + 1} slots` : 'slot'}.`);
+				}
+			}
+			return problems;
+		},
+		onModifyMove(move, pokemon, target) {
+			const types = pokemon.getTypes(true);
+			const noModifyType = [
+				'judgment', 'multiattack', 'naturalgift', 'revelationdance', 'technoblast', 'terrainpulse', 'weatherball',
+			];
+			if (noModifyType.includes(move.id)) return;
+			for (const [i, type] of types.entries()) {
+				if (!this.dex.types.isName(type)) continue;
+				if (pokemon.moveSlots[i] && move.id === pokemon.moveSlots[i].id) move.type = type;
+			}
 		},
 	},
 };
